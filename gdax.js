@@ -144,6 +144,7 @@ const get_order_by_id = exports.get_order_by_id = ( order_id ) => {
   return new Promise( (resolve, reject) => {
     gdax_private.getOrder( order_id, (error, response, data) => {
       if( error ) {
+        ui.logger('sys_log','Error: get_order_by_id -> ' + error.message + ' ' + error)
         reject( error )
         return
       }
@@ -161,7 +162,8 @@ const limit_order = exports.limit_order = (side, product_id, price, size) => {
       price: price.toFixed(2),    // fiat
       size: size.toString(),      // coin
       product_id,
-      type: 'limit'
+      type: 'limit',
+      post_only: true
     }
     gdax_private[side](order, (error, response, data) => {
       if( error || data === null ) {

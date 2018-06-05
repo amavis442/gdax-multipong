@@ -196,7 +196,7 @@ const mark_trade_for_sync = exports.mark_trade_for_sync = (trade, force=false) =
   update(trade, (t) => {
     t.sync_status.syncing = false
     t.sync_status.needs_sync = true
-    t.sync_status.retries = 0
+    t.sync_status.retries = 4
     t.sync_status.next_sync = new Date( new Date().valueOf() + 5000 )
   })
 }
@@ -225,17 +225,28 @@ exports.sync_trade = async function sync_trade( trade ) {
   ui.logger('sys_log', `Syncing order ${order_id}`)
 
   let data
+  let not_found = false
   try {
     data = await gdax.get_order_by_id( order_id )
   } catch( e ) {
     ui.logger('gdax_log', JSON.stringify(e))
     //  TODO: analyze failure modes
+
+    ui.logger('sys_log', 'CATCH ' + e.response.statusCode)
+    if( e.response.statusCode === 404 ) {
+      ui.logger('sys_log', `Trade ${trade.trade_id} not found in GDAX.`)
+      not_found = true
+      if( trade.state === 'canceling' ) {
+        reset_trade( trade )
+        mark_trade_sync_complete( trade )
+        return
+      }
+    }
   }
 
-  if( !data ) return
+  if( !data) return
 
   // Maybe this order was canceled, or we are checking too soon.
-  let not_found = false
   if( data.message && data.message === 'NotFound' ) {
     ui.logger('sys_log', `Trade ${trade.trade_id} not found in GDAX.`)
     not_found = true
@@ -552,7 +563,7 @@ const process_trades = exports.process_trades = () => {
 
 const update = (trade, mutator) => {
   mutator(trade)
-  //ui.logger('sys_log', `update_trade: ${JSON.stringify(trade)}`)
+  ui.logger('sys_log', `update_trade: ${JSON.stringify(trade)}`)
   try {
     db.collections.trades.update( trade )
   } catch( e ) {
